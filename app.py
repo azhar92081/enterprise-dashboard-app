@@ -25,7 +25,7 @@ def get_base64_image(image_path):
             return base64.b64encode(img_file.read()).decode()
     return ""
 
-logo_b64 = get_base64_image("LOGO.png")
+logo_b64 = get_base64_image("🍱")
 
 if logo_b64:
     manifest_json = f'''
