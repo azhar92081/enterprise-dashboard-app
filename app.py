@@ -11,50 +11,10 @@ from sklearn.preprocessing import MinMaxScaler
 import sqlite3
 import hashlib
 import os
-import base64
 import google.generativeai as genai
 
-# --- PAGE CONFIG ---
-st.set_page_config(page_title="Enterprise Intelligence Dashboard", layout="wide", page_icon="logo.png", initial_sidebar_state="expanded")
-
-# --- AUTOMATED PWA MANIFEST & ICON INJECTOR ---
-# This automatically reads your logo.png and builds the files Windows needs to make a desktop app.
-def get_base64_image(image_path):
-    if os.path.exists(image_path):
-        with open(image_path, "rb") as img_file:
-            return base64.b64encode(img_file.read()).decode()
-    return ""
-
-logo_b64 = get_base64_image("🍱")
-
-if logo_b64:
-    manifest_json = f'''
-    {{
-        "name": "Enterprise Intelligence Dashboard",
-        "short_name": "EI Dashboard",
-        "display": "standalone",
-        "theme_color": "#0E1117",
-        "background_color": "#0E1117",
-        "icons": [
-            {{
-                "src": "data:image/png;base64,{logo_b64}",
-                "sizes": "192x192",
-                "type": "image/png"
-            }},
-            {{
-                "src": "data:image/png;base64,{logo_b64}",
-                "sizes": "512x512",
-                "type": "image/png"
-            }}
-        ]
-    }}
-    '''
-    manifest_b64 = base64.b64encode(manifest_json.encode('utf-8')).decode()
-    st.markdown(f"""
-        <link rel="apple-touch-icon" href="data:image/png;base64,{logo_b64}">
-        <link rel="manifest" href="data:application/manifest+json;base64,{manifest_b64}">
-    """, unsafe_allow_html=True)
-
+# --- PAGE CONFIG (Native Emoji - Bypasses Caching Bugs!) ---
+st.set_page_config(page_title="Enterprise Intelligence Dashboard", layout="wide", page_icon="🛍️", initial_sidebar_state="expanded")
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -102,7 +62,7 @@ else:
     plotly_template = "plotly_white"
     chart_palette = ["#2563EB", "#DC2626", "#D97706", "#7C3AED", "#059669", "#EA580C"] 
     faded_palette = ["#A9C2EB", "#F0B8B8"]
-    
+
 # --- ULTRA-RESPONSIVE UI CSS WITH TRUNCATION & CHAT FIXES ---
 theme_css = f"""
 <style>
