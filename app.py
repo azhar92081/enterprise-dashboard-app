@@ -24,6 +24,9 @@ st.markdown("""
 # HIGH-CONTRAST PROFESSIONAL BI COLORS
 CUSTOM_COLORS = ["#00E5FF", "#FF3366", "#00FF66", "#FDB813", "#B366FF"]
 
+# UNIVERSAL HOVER STYLE FIX (Makes tooltips readable on transparent charts)
+HOVER_STYLE = dict(bgcolor="#1e293b", font_size=14, font_color="#ffffff", bordercolor="#00E5FF")
+
 # ==========================================
 # 2. DATA LOADING
 # ==========================================
@@ -32,6 +35,7 @@ def load_data():
     np.random.seed(42)
     dates = pd.date_range(start="2025-01-01", periods=100)
     
+    # Mock Sales Data
     df = pd.DataFrame({
         "Date": np.random.choice(dates, 500),
         "CustomerID": np.random.randint(1000, 1050, 500),
@@ -45,6 +49,7 @@ def load_data():
     df['Date'] = pd.to_datetime(df['Date'])
     df = df.sort_values("Date")
     
+    # Mock Traffic Data
     traffic_data = []
     for d in dates:
         for source in ["Organic Search", "Direct", "Social Media", "Paid Ads"]:
@@ -62,7 +67,7 @@ def load_data():
 raw_df, raw_traffic_df = load_data()
 
 # ==========================================
-# 3. SIDEBAR (Nav, Filters & API Key)
+# 3. SIDEBAR (Nav, Filters & SECRETS)
 # ==========================================
 with st.sidebar:
     st.markdown("### 🛍️ E-Commerce BI")
@@ -89,8 +94,15 @@ with st.sidebar:
     start_date, end_date = st.date_input("Select Date Range", [min_date, max_date])
     
     st.divider()
-    st.markdown("### 🔑 AI Settings")
-    api_key = st.text_input("Enter Gemini API Key", type="password", help="Get this from Google AI Studio")
+    st.markdown("### 🤖 AI Status")
+    
+    # SECRETS INTEGRATION (No more typing the API key!)
+    try:
+        api_key = st.secrets["GEMINI_API_KEY"]
+        st.success("🔑 API Key Securely Loaded")
+    except KeyError:
+        st.error("⚠️ Missing 'GEMINI_API_KEY' in Streamlit Secrets.")
+        api_key = None
 
 # ==========================================
 # 4. APPLY FILTERS
@@ -121,14 +133,14 @@ if selected == "Executive Dashboard":
             st.markdown("**Revenue Trend Over Time**")
             trend_df = df.groupby("Date")["Sales"].sum().reset_index()
             fig1 = px.line(trend_df, x="Date", y="Sales", color_discrete_sequence=[CUSTOM_COLORS[0]])
-            fig1.update_layout(margin=dict(l=0, r=0, t=10, b=0), height=350, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
+            fig1.update_layout(margin=dict(l=0, r=0, t=10, b=0), height=350, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", hoverlabel=HOVER_STYLE)
             st.plotly_chart(fig1, use_container_width=True)
             
         with col2:
             st.markdown("**Sales by Category**")
             cat_df = df.groupby("Category")["Sales"].sum().reset_index()
             fig2 = px.bar(cat_df, x="Category", y="Sales", color="Category", color_discrete_sequence=CUSTOM_COLORS)
-            fig2.update_layout(margin=dict(l=0, r=0, t=10, b=0), height=350, showlegend=False, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
+            fig2.update_layout(margin=dict(l=0, r=0, t=10, b=0), height=350, showlegend=False, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", hoverlabel=HOVER_STYLE)
             st.plotly_chart(fig2, use_container_width=True)
 
 # ==========================================
@@ -152,15 +164,14 @@ elif selected == "Web Traffic & SEO":
             st.markdown("**Traffic Sources Breakdown**")
             source_df = traffic_df.groupby("Source")["Visitors"].sum().reset_index()
             fig_pie = px.pie(source_df, names="Source", values="Visitors", hole=0.6, color_discrete_sequence=CUSTOM_COLORS)
-            fig_pie.update_layout(margin=dict(l=0, r=0, t=10, b=0), height=350, paper_bgcolor="rgba(0,0,0,0)")
+            fig_pie.update_layout(margin=dict(l=0, r=0, t=10, b=0), height=350, paper_bgcolor="rgba(0,0,0,0)", hoverlabel=HOVER_STYLE)
             st.plotly_chart(fig_pie, use_container_width=True)
             
         with col2:
             st.markdown("**Daily Visitors by Source**")
             daily_traffic = traffic_df.groupby(["Date", "Source"])["Visitors"].sum().reset_index()
-            # Changed from area to line for a cleaner look
             fig_line = px.line(daily_traffic, x="Date", y="Visitors", color="Source", color_discrete_sequence=CUSTOM_COLORS)
-            fig_line.update_layout(margin=dict(l=0, r=0, t=10, b=0), height=350, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
+            fig_line.update_layout(margin=dict(l=0, r=0, t=10, b=0), height=350, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", hoverlabel=HOVER_STYLE)
             st.plotly_chart(fig_line, use_container_width=True)
 
 # ==========================================
@@ -185,7 +196,7 @@ elif selected == "Customer Intelligence":
                 df_clustered['Segment'] = kmeans.fit_predict(rfm_data).astype(str)
                 
                 fig3 = px.scatter_3d(df_clustered, x='Recency', y='Frequency', z='Monetary', color='Segment', color_discrete_sequence=CUSTOM_COLORS)
-                fig3.update_layout(margin=dict(l=0, r=0, t=10, b=0), height=450, paper_bgcolor="rgba(0,0,0,0)")
+                fig3.update_layout(margin=dict(l=0, r=0, t=10, b=0), height=450, paper_bgcolor="rgba(0,0,0,0)", hoverlabel=HOVER_STYLE)
                 st.plotly_chart(fig3, use_container_width=True)
 
 # ==========================================
@@ -196,45 +207,39 @@ elif selected == "🤖 AI Analyst":
     st.markdown("Ask the AI questions about your current filtered dashboard data.")
     
     if not api_key:
-        st.error("⚠️ Please enter your Gemini API Key in the sidebar to activate the AI Analyst.")
+        st.error("⚠️ Your API key is not configured in Streamlit Secrets. Please add it to use the AI.")
     else:
-        # Initialize Gemini
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel('gemini-2.5-flash')
         
-        # Initialize Chat History in Streamlit Session State
         if "messages" not in st.session_state:
             st.session_state.messages = [
                 {"role": "assistant", "content": "Hello! I am your AI Data Analyst. Ask me anything about the sales or traffic data currently visible on your dashboard!"}
             ]
 
-        # Display Chat History
         for msg in st.session_state.messages:
             st.chat_message(msg["role"]).write(msg["content"])
 
-        # Chat Input
         if prompt := st.chat_input("Ask a question (e.g., 'What is our top category?'):"):
             st.session_state.messages.append({"role": "user", "content": prompt})
             st.chat_message("user").write(prompt)
             
-            # Create a data context string to feed to Gemini
             data_context = f"""
             You are a professional Business Intelligence AI. Answer the user based ONLY on this current data context:
             Total Sales: ${df['Sales'].sum():.2f}
             Total Profit: ${df['Profit'].sum():.2f}
             Total Orders: {len(df)}
-            Top Category: {df.groupby('Category')['Sales'].sum().idxmax()}
+            Top Category: {df.groupby('Category')['Sales'].sum().idxmax() if not df.empty else 'N/A'}
             Total Web Visitors: {traffic_df['Visitors'].sum() if not traffic_df.empty else 0}
             Top Traffic Source: {traffic_df.groupby('Source')['Visitors'].sum().idxmax() if not traffic_df.empty else 'N/A'}
             """
             
-            # Call Gemini API
             with st.spinner("Analyzing data..."):
                 try:
                     response = model.generate_content(f"{data_context}\n\nUser Question: {prompt}")
                     msg = response.text
                 except Exception as e:
-                    msg = f"API Error: Make sure your key is valid. Details: {e}"
+                    msg = f"API Error: Details: {e}"
             
             st.session_state.messages.append({"role": "assistant", "content": msg})
             st.chat_message("assistant").write(msg)
