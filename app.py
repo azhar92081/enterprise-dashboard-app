@@ -5,6 +5,7 @@ import plotly.express as px
 from streamlit_option_menu import option_menu
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import silhouette_score
 import google.generativeai as genai
 
 # ==========================================
@@ -27,7 +28,7 @@ CUSTOM_COLORS = ["#00E5FF", "#FF3366", "#00FF66", "#FDB813", "#B366FF"]
 HOVER_STYLE = dict(bgcolor="#1e293b", font_size=14, font_color="#ffffff", bordercolor="#00E5FF")
 
 # ==========================================
-# 2. DATA HANDLING (With Validation & Scalability Guardrails)
+# 2. CACHED DATA HANDLING & OPTIMIZATION
 # ==========================================
 @st.cache_data
 def generate_mock_data():
@@ -67,6 +68,20 @@ def validate_sales_data(df):
 def convert_df_to_csv(df):
     return df.to_csv(index=False).encode('utf-8')
 
+# OPTIMIZATION: Cache the Silhouette Score Calculation to save memory
+@st.cache_data
+def calculate_optimal_k(scaled_data, max_k=5):
+    best_k = 3
+    best_score = -1
+    for k in range(2, max_k + 1):
+        kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+        labels = kmeans.fit_predict(scaled_data)
+        score = silhouette_score(scaled_data, labels)
+        if score > best_score:
+            best_score = score
+            best_k = k
+    return best_k
+
 # ==========================================
 # 3. SIDEBAR (Nav, Upload, Security & Filters)
 # ==========================================
@@ -88,7 +103,6 @@ with st.sidebar:
     
     raw_df, raw_traffic_df = generate_mock_data()
     
-    # Process Sales File
     if sales_file:
         try:
             temp_df = pd.read_csv(sales_file)
@@ -101,11 +115,10 @@ with st.sidebar:
                 raw_df = temp_df
                 st.success("Sales data validated!")
             else:
-                st.error(f"Validation Failed: {error_msg}. Reverting to mock data.")
+                st.error(f"Validation Failed: {error_msg}")
         except Exception as e:
-            st.error(f"Corrupted file: {e}. Reverting to mock data.")
+            st.error(f"Corrupted file: {e}")
             
-    # Process Traffic File
     if traffic_file:
         try:
             temp_traffic = pd.read_csv(traffic_file)
@@ -121,13 +134,10 @@ with st.sidebar:
     categories = raw_df['Category'].unique().tolist()
     selected_categories = st.multiselect("Select Categories", categories, default=categories)
     
-    # --- LOGIC FIX 1: Synchronized Date Filter ---
-    min_sales_date = raw_df['Date'].min().date()
-    max_sales_date = raw_df['Date'].max().date()
+    min_sales_date, max_sales_date = raw_df['Date'].min().date(), raw_df['Date'].max().date()
     
     if not raw_traffic_df.empty and 'Date' in raw_traffic_df.columns:
-        min_traffic_date = raw_traffic_df['Date'].min().date()
-        max_traffic_date = raw_traffic_df['Date'].max().date()
+        min_traffic_date, max_traffic_date = raw_traffic_df['Date'].min().date(), raw_traffic_df['Date'].max().date()
         min_date = min(min_sales_date, min_traffic_date)
         max_date = max(max_sales_date, max_traffic_date)
     else:
@@ -147,7 +157,7 @@ with st.sidebar:
         api_key = None
 
 # ==========================================
-# 4. APPLY FILTERS & DOWNLOAD BUTTON
+# 4. FILTERING & MAIN DATA EXPORT
 # ==========================================
 mask = (raw_df['Category'].isin(selected_categories)) & (raw_df['Date'].dt.date >= start_date) & (raw_df['Date'].dt.date <= end_date)
 df = raw_df[mask]
@@ -231,17 +241,26 @@ elif selected == "Customer Intelligence":
         st.warning("⚠️ No data available.")
     else:
         col1, col2 = st.columns([1, 2])
-        with col1:
-            st.markdown("### Advanced ML Engine")
-            clusters = st.slider("Select K-Means Clusters:", min_value=2, max_value=6, value=3)
-            st.info(f"**Data Science Note:** RFM variables have been normalized using `StandardScaler` to prevent Monetary variance from skewing calculations. Processing {len(df['CustomerID'].unique())} customers.")
+        
+        # Pre-process Data for ML
+        rfm_data = df[['Recency', 'Frequency', 'Monetary']].dropna()
+        if len(rfm_data) > 2:
+            scaler = StandardScaler()
+            scaled_rfm = scaler.fit_transform(rfm_data)
+            
+            # OPTIMIZATION: Auto-calculate best cluster count mathematically
+            optimal_k = calculate_optimal_k(scaled_rfm)
+            
+            with col1:
+                st.markdown("### Advanced ML Engine")
+                # Pre-fill slider with the AI's mathematically proven suggestion
+                clusters = st.slider("Select K-Means Clusters:", min_value=2, max_value=6, value=optimal_k)
                 
-        with col2:
-            rfm_data = df[['Recency', 'Frequency', 'Monetary']].dropna()
-            if len(rfm_data) > clusters:
-                scaler = StandardScaler()
-                scaled_rfm = scaler.fit_transform(rfm_data)
-                
+                # Show the user why this is the best option
+                st.success(f"💡 **AI Suggestion:** Silhouette Score analysis indicates that **{optimal_k} clusters** is mathematically optimal for this dataset.")
+                st.info(f"**Data Science Note:** RFM variables normalized using `StandardScaler`. Processing {len(df['CustomerID'].unique())} unique customers.")
+                    
+            with col2:
                 kmeans = KMeans(n_clusters=clusters, random_state=42, n_init=10)
                 df_clustered = df.copy()
                 df_clustered['Segment'] = kmeans.fit_predict(scaled_rfm).astype(str)
@@ -250,15 +269,24 @@ elif selected == "Customer Intelligence":
                 fig3.update_layout(margin=dict(l=0, r=0, t=10, b=0), height=450, paper_bgcolor="rgba(0,0,0,0)", hoverlabel=HOVER_STYLE)
                 st.plotly_chart(fig3, use_container_width=True)
                 
-                st.markdown("### 📊 Actionable Segment Profiles")
-                st.write("Average behavior metrics for each customer segment:")
+                # --- ACTIONABLE PROFILES & DOWNLOAD ---
+                col_title, col_dl = st.columns([3, 1])
+                with col_title:
+                    st.markdown("### 📊 Actionable Segment Profiles")
                 
                 cluster_summary = df_clustered.groupby('Segment')[['Recency', 'Frequency', 'Monetary']].mean().reset_index()
-                cluster_summary['Recency'] = cluster_summary['Recency'].apply(lambda x: f"{x:.0f} days ago")
-                cluster_summary['Frequency'] = cluster_summary['Frequency'].apply(lambda x: f"{x:.1f} times")
-                cluster_summary['Monetary'] = cluster_summary['Monetary'].apply(lambda x: f"${x:,.2f}")
                 
-                st.dataframe(cluster_summary, use_container_width=True, hide_index=True)
+                # OPTIMIZATION: Export Segments Button
+                with col_dl:
+                    csv_segments = convert_df_to_csv(cluster_summary)
+                    st.download_button(label="📥 Export Segments", data=csv_segments, file_name="customer_segments.csv", mime="text/csv")
+
+                # Format for display
+                display_summary = cluster_summary.copy()
+                display_summary['Recency'] = display_summary['Recency'].apply(lambda x: f"{x:.0f} days ago")
+                display_summary['Frequency'] = display_summary['Frequency'].apply(lambda x: f"{x:.1f} times")
+                display_summary['Monetary'] = display_summary['Monetary'].apply(lambda x: f"${x:,.2f}")
+                st.dataframe(display_summary, use_container_width=True, hide_index=True)
 
 # ==========================================
 # PAGE 4: SMART AI DATA ANALYST
@@ -305,8 +333,6 @@ elif selected == "🤖 AI Analyst":
         """, unsafe_allow_html=True)
         
         st.divider()
-        
-        # --- LOGIC FIX 2: Clear Chat Memory UI ---
         col_chat, col_btn = st.columns([4, 1])
         with col_chat:
             st.markdown("#### 💬 Encrypted Data Chat")
