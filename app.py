@@ -57,7 +57,6 @@ def generate_mock_data():
     return df.sort_values("Date"), pd.DataFrame(traffic_data)
 
 def validate_sales_data(df):
-    """SUPERVISOR FIX: Strict Schema Validation"""
     required_cols = ['Date', 'CustomerID', 'Category', 'Sales', 'Profit', 'Recency', 'Frequency', 'Monetary']
     missing = [col for col in required_cols if col not in df.columns]
     if missing:
@@ -85,27 +84,37 @@ with st.sidebar:
     st.divider()
     st.markdown("### 📁 Data Importer")
     sales_file = st.file_uploader("Upload Sales CSV", type=["csv"])
+    traffic_file = st.file_uploader("Upload Traffic CSV", type=["csv"])
     
-    # Initialize variables
     raw_df, raw_traffic_df = generate_mock_data()
     
+    # Process Sales File
     if sales_file:
         try:
             temp_df = pd.read_csv(sales_file)
             is_valid, error_msg = validate_sales_data(temp_df)
             if is_valid:
-                # SUPERVISOR FIX: Scalability Guardrail
                 if len(temp_df) > 50000:
-                    st.warning("⚠️ Large dataset detected. Sampling top 50,000 rows to ensure cloud stability.")
+                    st.warning("⚠️ Large dataset detected. Sampling top 50,000 rows.")
                     temp_df = temp_df.sample(50000, random_state=42)
-                
                 temp_df['Date'] = pd.to_datetime(temp_df['Date'])
                 raw_df = temp_df
-                st.success("Custom data passed validation!")
+                st.success("Sales data validated!")
             else:
-                st.error(f"Validation Failed: {error_msg}. Reverting to safe mock data.")
+                st.error(f"Validation Failed: {error_msg}. Reverting to mock data.")
         except Exception as e:
-            st.error(f"Corrupted file: {e}. Reverting to safe mock data.")
+            st.error(f"Corrupted file: {e}. Reverting to mock data.")
+            
+    # Process Traffic File
+    if traffic_file:
+        try:
+            temp_traffic = pd.read_csv(traffic_file)
+            if 'Date' in temp_traffic.columns and 'Visitors' in temp_traffic.columns:
+                temp_traffic['Date'] = pd.to_datetime(temp_traffic['Date'])
+                raw_traffic_df = temp_traffic
+                st.success("Traffic data loaded!")
+        except Exception:
+            pass
 
     st.divider()
     st.markdown("### 🔍 Global Filters")
@@ -117,8 +126,7 @@ with st.sidebar:
     
     st.divider()
     st.markdown("### 🔐 Enterprise AI Security")
-    # SUPERVISOR FIX: Data Privacy Toggle
-    anonymize_data = st.checkbox("Anonymize Financial Data for AI", value=True, help="Masks absolute revenue figures before sending to the external LLM.")
+    anonymize_data = st.checkbox("Anonymize Financial Data for AI", value=True)
     
     try:
         api_key = st.secrets["GEMINI_API_KEY"]
@@ -204,7 +212,7 @@ elif selected == "Web Traffic & SEO":
             st.plotly_chart(fig_line, use_container_width=True)
 
 # ==========================================
-# PAGE 3: CUSTOMER INTELLIGENCE (ML FIXED)
+# PAGE 3: CUSTOMER INTELLIGENCE (WITH SEGMENT PROFILES)
 # ==========================================
 elif selected == "Customer Intelligence":
     st.title("🧠 Mathematically Scaled Segmentation")
@@ -215,26 +223,32 @@ elif selected == "Customer Intelligence":
         with col1:
             st.markdown("### Advanced ML Engine")
             clusters = st.slider("Select K-Means Clusters:", min_value=2, max_value=6, value=3)
-            
-            # SUPERVISOR FIX: Mathematical Justification
-            st.info(f"**Data Science Note:** RFM variables have been normalized using `StandardScaler` to prevent Monetary variance from skewing the Euclidean distance calculations. Processing {len(df['CustomerID'].unique())} customers.")
+            st.info(f"**Data Science Note:** RFM variables have been normalized using `StandardScaler` to prevent Monetary variance from skewing calculations. Processing {len(df['CustomerID'].unique())} customers.")
                 
         with col2:
             rfm_data = df[['Recency', 'Frequency', 'Monetary']].dropna()
             if len(rfm_data) > clusters:
-                # SUPERVISOR FIX: StandardScaler Applied!
                 scaler = StandardScaler()
                 scaled_rfm = scaler.fit_transform(rfm_data)
                 
                 kmeans = KMeans(n_clusters=clusters, random_state=42, n_init=10)
                 df_clustered = df.copy()
-                # Predict on SCALED data
                 df_clustered['Segment'] = kmeans.fit_predict(scaled_rfm).astype(str)
                 
-                # Plot on ORIGINAL axes so humans can still read the $ values
                 fig3 = px.scatter_3d(df_clustered, x='Recency', y='Frequency', z='Monetary', color='Segment', color_discrete_sequence=CUSTOM_COLORS)
                 fig3.update_layout(margin=dict(l=0, r=0, t=10, b=0), height=450, paper_bgcolor="rgba(0,0,0,0)", hoverlabel=HOVER_STYLE)
                 st.plotly_chart(fig3, use_container_width=True)
+                
+                # --- NEW ENTERPRISE UPGRADE: CLUSTER PROFILING ---
+                st.markdown("### 📊 Actionable Segment Profiles")
+                st.write("Average behavior metrics for each customer segment:")
+                
+                cluster_summary = df_clustered.groupby('Segment')[['Recency', 'Frequency', 'Monetary']].mean().reset_index()
+                cluster_summary['Recency'] = cluster_summary['Recency'].apply(lambda x: f"{x:.0f} days ago")
+                cluster_summary['Frequency'] = cluster_summary['Frequency'].apply(lambda x: f"{x:.1f} times")
+                cluster_summary['Monetary'] = cluster_summary['Monetary'].apply(lambda x: f"${x:,.2f}")
+                
+                st.dataframe(cluster_summary, use_container_width=True, hide_index=True)
 
 # ==========================================
 # PAGE 4: SMART AI DATA ANALYST
@@ -245,7 +259,6 @@ elif selected == "🤖 AI Analyst":
     if df.empty or traffic_df.empty:
         st.warning("⚠️ Please adjust your filters. Not enough data to generate insights.")
     else:
-        # Check Privacy Mode
         if anonymize_data:
             st.caption("🔒 **Enterprise Security Mode Enabled:** Absolute financial figures are masked from the LLM prompt.")
         else:
@@ -255,7 +268,6 @@ elif selected == "🤖 AI Analyst":
         top_cat_sales = df.groupby("Category")["Sales"].sum().max()
         best_traffic_source = traffic_df.groupby("Source")["Conversions"].sum().idxmax()
         
-        # Determine Context String based on Privacy Toggle
         if anonymize_data:
             data_context = f"""
             You are a secure BI Analyst. Data context (ANONYMIZED):
