@@ -121,7 +121,18 @@ with st.sidebar:
     categories = raw_df['Category'].unique().tolist()
     selected_categories = st.multiselect("Select Categories", categories, default=categories)
     
-    min_date, max_date = raw_df['Date'].min().date(), raw_df['Date'].max().date()
+    # --- LOGIC FIX 1: Synchronized Date Filter ---
+    min_sales_date = raw_df['Date'].min().date()
+    max_sales_date = raw_df['Date'].max().date()
+    
+    if not raw_traffic_df.empty and 'Date' in raw_traffic_df.columns:
+        min_traffic_date = raw_traffic_df['Date'].min().date()
+        max_traffic_date = raw_traffic_df['Date'].max().date()
+        min_date = min(min_sales_date, min_traffic_date)
+        max_date = max(max_sales_date, max_traffic_date)
+    else:
+        min_date, max_date = min_sales_date, max_sales_date
+
     start_date, end_date = st.date_input("Select Date Range", [min_date, max_date])
     
     st.divider()
@@ -212,7 +223,7 @@ elif selected == "Web Traffic & SEO":
             st.plotly_chart(fig_line, use_container_width=True)
 
 # ==========================================
-# PAGE 3: CUSTOMER INTELLIGENCE (WITH SEGMENT PROFILES)
+# PAGE 3: CUSTOMER INTELLIGENCE
 # ==========================================
 elif selected == "Customer Intelligence":
     st.title("🧠 Mathematically Scaled Segmentation")
@@ -239,7 +250,6 @@ elif selected == "Customer Intelligence":
                 fig3.update_layout(margin=dict(l=0, r=0, t=10, b=0), height=450, paper_bgcolor="rgba(0,0,0,0)", hoverlabel=HOVER_STYLE)
                 st.plotly_chart(fig3, use_container_width=True)
                 
-                # --- NEW ENTERPRISE UPGRADE: CLUSTER PROFILING ---
                 st.markdown("### 📊 Actionable Segment Profiles")
                 st.write("Average behavior metrics for each customer segment:")
                 
@@ -264,9 +274,9 @@ elif selected == "🤖 AI Analyst":
         else:
             st.caption("⚠️ **Warning:** Raw financial data is being transmitted to external APIs.")
 
-        top_category = df.groupby("Category")["Sales"].sum().idxmax()
-        top_cat_sales = df.groupby("Category")["Sales"].sum().max()
-        best_traffic_source = traffic_df.groupby("Source")["Conversions"].sum().idxmax()
+        top_category = df.groupby("Category")["Sales"].sum().idxmax() if not df.empty else "N/A"
+        top_cat_sales = df.groupby("Category")["Sales"].sum().max() if not df.empty else 0
+        best_traffic_source = traffic_df.groupby("Source")["Conversions"].sum().idxmax() if not traffic_df.empty else "N/A"
         
         if anonymize_data:
             data_context = f"""
@@ -295,7 +305,15 @@ elif selected == "🤖 AI Analyst":
         """, unsafe_allow_html=True)
         
         st.divider()
-        st.markdown("#### 💬 Encrypted Data Chat")
+        
+        # --- LOGIC FIX 2: Clear Chat Memory UI ---
+        col_chat, col_btn = st.columns([4, 1])
+        with col_chat:
+            st.markdown("#### 💬 Encrypted Data Chat")
+        with col_btn:
+            if st.button("🗑️ Clear Chat"):
+                st.session_state.messages = [{"role": "assistant", "content": "Memory cleared. What new data are we looking at?"}]
+                st.rerun()
         
         if not api_key:
             st.error("⚠️ Your API key is not configured in Streamlit Secrets.")
