@@ -9,10 +9,10 @@ from sklearn.metrics import silhouette_score
 import google.generativeai as genai
 
 # ==========================================
-# 1. PAGE CONFIGURATION
+# 1. PAGE CONFIGURATION & TITLE
 # ==========================================
 st.set_page_config(page_title="E-Commerce BI Dashboard", page_icon="📊", layout="wide")
-st.title("🛍️ E-Commerce Intelligence & Data Mining Dashboard")
+st.title("🛍️ E-Commerce Customer Sales and Business Intelligence Dashboard")
 
 # Initialize Chat Memory
 if "messages" not in st.session_state:
@@ -23,7 +23,7 @@ if "messages" not in st.session_state:
 # ==========================================
 st.sidebar.header("⚙️ Command Center")
 
-# API Key & Security
+# API Key & Security (The Old Features)
 api_key = st.sidebar.text_input("Enter Google Gemini API Key:", type="password")
 privacy_mode = st.sidebar.toggle("🔒 Enterprise Privacy Mode", value=True, 
                                  help="Masks exact financial figures before sending to AI.")
@@ -34,7 +34,7 @@ sales_file = st.sidebar.file_uploader("1. Upload Sales Data (CSV)", type=["csv"]
 traffic_file = st.sidebar.file_uploader("2. Upload Web Traffic (CSV)", type=["csv"])
 
 # ==========================================
-# 3. CORE FUNCTIONS (With Caching & Guardrails)
+# 3. CORE FUNCTIONS & GUARDRAILS
 # ==========================================
 @st.cache_data
 def load_and_validate_sales(file):
@@ -48,7 +48,7 @@ def load_and_validate_sales(file):
         
     # Scalability Guardrail (OOM Protection)
     if len(df) > 50000:
-        st.sidebar.warning(f"⚠️ Dataset too large ({len(df)} rows). Downsampling to 50,000 to prevent memory crash.")
+        st.sidebar.warning(f"⚠️ Dataset too large ({len(df)} rows). Downsampling to 50,000.")
         df = df.sample(50000, random_state=42)
         
     df['Date'] = pd.to_datetime(df['Date'])
@@ -84,14 +84,13 @@ def calculate_optimal_kmeans(df):
     final_model = KMeans(n_clusters=best_k, random_state=42, n_init=10)
     df['Segment'] = final_model.fit_predict(X_scaled).astype(str)
     
-    # Map Segment Names for better UI
     segment_map = {'0': 'High-Value Loyalists', '1': 'At-Risk Customers', '2': 'Recent/Low-Spend', '3': 'Mid-Tier', '4': 'Others'}
     df['Segment_Name'] = df['Segment'].map(segment_map).fillna(f"Cluster {df['Segment']}")
     
     return df, best_k, best_score
 
 # ==========================================
-# 4. DASHBOARD TABS
+# 4. DASHBOARD TABS & FILTERS
 # ==========================================
 if sales_file and traffic_file:
     df_sales = load_and_validate_sales(sales_file)
@@ -100,18 +99,33 @@ if sales_file and traffic_file:
     if df_sales is not None:
         st.sidebar.success("✅ Data Ingested & Validated!")
         
+        # BRINGING BACK THE OLD FEATURES: Global Filters
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("🔍 Global Filters")
+        
         # Date Filter
         min_date, max_date = df_sales['Date'].min(), df_sales['Date'].max()
         selected_dates = st.sidebar.date_input("Filter by Date Range:", [min_date, max_date])
         
+        # Category Filter
+        categories = df_sales['Category'].unique().tolist()
+        selected_categories = st.sidebar.multiselect("Filter by Category:", categories, default=categories)
+        
+        # Apply Filters
         if len(selected_dates) == 2:
-            mask = (df_sales['Date'] >= pd.to_datetime(selected_dates[0])) & (df_sales['Date'] <= pd.to_datetime(selected_dates[1]))
+            mask = (df_sales['Date'] >= pd.to_datetime(selected_dates[0])) & \
+                   (df_sales['Date'] <= pd.to_datetime(selected_dates[1])) & \
+                   (df_sales['Category'].isin(selected_categories))
             df_filtered = df_sales.loc[mask]
         else:
-            df_filtered = df_sales
+            df_filtered = df_sales.loc[df_sales['Category'].isin(selected_categories)]
 
         # Run ML Clustering
-        df_ml, optimal_k, sil_score = calculate_optimal_kmeans(df_filtered)
+        if not df_filtered.empty:
+            df_ml, optimal_k, sil_score = calculate_optimal_kmeans(df_filtered)
+        else:
+            st.error("No data available for the selected filters.")
+            st.stop()
 
         # Build Tabs
         tab1, tab2, tab3, tab4 = st.tabs(["📈 Executive KPIs", "🌐 Web Traffic", "🧠 ML Intelligence", "🤖 AI Analyst"])
@@ -149,23 +163,23 @@ if sales_file and traffic_file:
                                    opacity=0.7, size_max=10)
             st.plotly_chart(fig_3d, use_container_width=True)
 
-        # --- TAB 4: AI ANALYST (THE UPGRADE) ---
+        # --- TAB 4: AI ANALYST (VISUAL INSIGHTS FIX) ---
         with tab4:
             st.header("💬 Prescriptive AI Analyst")
-            st.markdown("Ask natural language questions about your business data. The AI will provide **structured, visual insights**.")
+            st.markdown("Ask natural language questions. The AI will provide **Visual Data Insights** using inline charts and tables.")
             
             if st.button("🗑️ Clear Chat Memory"):
                 st.session_state.messages = []
                 st.rerun()
 
-            # Prepare Data Context for AI
+            # Prepare Dynamic Data Context for AI
+            category_breakdown = df_filtered.groupby('Category')['Sales'].sum().to_dict()
             total_sales = df_filtered['Sales'].sum()
-            top_category = df_filtered.groupby('Category')['Sales'].sum().idxmax()
             
             if privacy_mode:
-                context_string = f"Data Summary: Total rows={len(df_filtered)}. Top Category is {top_category}. Exact financials are [REDACTED FOR ENTERPRISE PRIVACY]. Talk in percentages and trends."
+                context_string = f"Data Context (Masked for Privacy): Total rows={len(df_filtered)}. Category breakdown proportions: {category_breakdown}. Speak in percentages and trends, DO NOT reveal exact financial numbers."
             else:
-                context_string = f"Data Summary: Total Sales=${total_sales:,.2f}. Total rows={len(df_filtered)}. Top Category is {top_category}."
+                context_string = f"Data Context: Total Sales=${total_sales:,.2f}. Total rows={len(df_filtered)}. Category Sales Breakdown: {category_breakdown}."
 
             # Display Chat History
             for msg in st.session_state.messages:
@@ -173,7 +187,7 @@ if sales_file and traffic_file:
                     st.markdown(msg["content"])
 
             # Handle New Input
-            if prompt := st.chat_input("E.g., 'What are my most profitable categories? Use a table.'"):
+            if prompt := st.chat_input("E.g., 'Visualize my category sales breakdown.'"):
                 if not api_key:
                     st.error("⚠️ Please enter your Gemini API Key in the sidebar first!")
                 else:
@@ -182,22 +196,25 @@ if sales_file and traffic_file:
                     with st.chat_message("user"):
                         st.markdown(prompt)
 
-                    # Call Gemini
+                    # Call Gemini with VISUAL Generation Rules
                     with st.chat_message("assistant"):
-                        with st.spinner("Analyzing data..."):
+                        with st.spinner("Generating Visual Insights..."):
                             try:
                                 genai.configure(api_key=api_key)
                                 model = genai.GenerativeModel('gemini-2.5-flash')
                                 
-                                # Strict Prompt Engineering for Visual Output
+                                # STRICT PROMPT TO FORCE VISUALS
                                 system_instruction = f"""
-                                You are an expert E-Commerce Business Analyst. 
+                                You are a highly advanced E-Commerce Business Intelligence Analyst.
                                 Context: {context_string}.
-                                RULES FOR YOUR RESPONSE:
-                                1. ALWAYS format your data comparisons using Markdown Tables.
-                                2. Use bold text to highlight Key Performance Indicators (KPIs).
-                                3. Use relevant emojis (📈, 💰, ⚠️, 🏆) to make the text visually appealing and easy to scan.
-                                4. Keep insights sharp, prescriptive, and professional.
+                                
+                                CRITICAL RULES FOR VISUAL INSIGHTS:
+                                1. You MUST generate visual inline bar charts using Markdown symbols (e.g., █) to represent data proportions.
+                                2. Example Format: 
+                                   Electronics | ██████████ 50%
+                                   Apparel     | █████ 25%
+                                3. ALWAYS use Markdown tables to organize data logically.
+                                4. Keep your responses highly analytical, visual, and easy to read. Do not output massive walls of text.
                                 """
                                 
                                 response = model.generate_content(f"{system_instruction}\n\nUser Question: {prompt}")
