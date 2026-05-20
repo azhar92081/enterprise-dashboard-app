@@ -149,19 +149,18 @@ with st.sidebar:
     st.markdown("### 🔐 Enterprise AI Security")
     anonymize_data = st.checkbox("Anonymize Financial Data for AI", value=True)
     
-    # HYBRID API KEY SYSTEM
-    manual_api_key = st.text_input("Enter Gemini API Key (Fallback):", type="password")
-    
-    if manual_api_key:
-        api_key = manual_api_key
-        st.success("🔑 Manual Key Active")
-    else:
-        try:
-            api_key = st.secrets["GEMINI_API_KEY"]
-            st.success("🔑 Vault Key Active")
-        except KeyError:
-            st.warning("⚠️ Please enter your API key to unlock the AI Analyst.")
-            api_key = None
+    # SMART HYBRID API KEY SYSTEM
+    api_key = None
+    try:
+        # 1. Try to automatically grab the key from the local vault first
+        api_key = st.secrets["GEMINI_API_KEY"]
+        st.success("🔑 Vault Key Active (Auto)")
+    except Exception:
+        # 2. ONLY show the manual input box if the vault is completely missing
+        st.warning("⚠️ Secret vault not found. Please enter your API key manually.")
+        api_key = st.text_input("Enter Gemini API Key (Fallback):", type="password")
+        if api_key:
+            st.success("🔑 Manual Key Active")
 
 # ==========================================
 # 4. FILTERING & MAIN DATA EXPORT
