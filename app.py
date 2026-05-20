@@ -149,12 +149,19 @@ with st.sidebar:
     st.markdown("### 🔐 Enterprise AI Security")
     anonymize_data = st.checkbox("Anonymize Financial Data for AI", value=True)
     
-    try:
-        api_key = st.secrets["GEMINI_API_KEY"]
-        st.success("🔑 Vault Key Active")
-    except KeyError:
-        st.error("⚠️ Missing API Key in secrets.")
-        api_key = None
+    # HYBRID API KEY SYSTEM
+    manual_api_key = st.text_input("Enter Gemini API Key (Fallback):", type="password")
+    
+    if manual_api_key:
+        api_key = manual_api_key
+        st.success("🔑 Manual Key Active")
+    else:
+        try:
+            api_key = st.secrets["GEMINI_API_KEY"]
+            st.success("🔑 Vault Key Active")
+        except KeyError:
+            st.warning("⚠️ Please enter your API key to unlock the AI Analyst.")
+            api_key = None
 
 # ==========================================
 # 4. FILTERING & MAIN DATA EXPORT
@@ -292,7 +299,7 @@ elif selected == "Customer Intelligence":
                 st.dataframe(display_summary, use_container_width=True, hide_index=True)
 
 # ==========================================
-# PAGE 4: SMART AI DATA ANALYST (FIXED VISUAL INSIGHTS)
+# PAGE 4: SMART AI DATA ANALYST
 # ==========================================
 elif selected == "🤖 AI Analyst":
     st.title("🤖 Secure Enterprise AI Analyst")
@@ -308,8 +315,6 @@ elif selected == "🤖 AI Analyst":
         top_category = df.groupby("Category")["Sales"].sum().idxmax() if not df.empty and 'Category' in df.columns else "N/A"
         top_cat_sales = df.groupby("Category")["Sales"].sum().max() if not df.empty and 'Category' in df.columns else 0
         best_traffic_source = traffic_df.groupby("Source")["Conversions"].sum().idxmax() if not traffic_df.empty and 'Source' in traffic_df.columns else "N/A"
-        
-        # ADDED: Groupby logic so the AI has actual breakdown data to visualize
         category_breakdown = df.groupby('Category')['Sales'].sum().to_dict() if 'Category' in df.columns else "N/A"
         
         if anonymize_data:
@@ -365,7 +370,7 @@ elif selected == "🤖 AI Analyst":
                 st.rerun()
         
         if not api_key:
-            st.error("⚠️ Your API key is not configured in Streamlit Secrets.")
+            st.error("⚠️ Your API key is not configured in Streamlit Secrets, and no manual key was provided.")
         else:
             genai.configure(api_key=api_key)
             model = genai.GenerativeModel('gemini-2.5-flash')
