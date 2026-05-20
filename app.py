@@ -292,7 +292,7 @@ elif selected == "Customer Intelligence":
                 st.dataframe(display_summary, use_container_width=True, hide_index=True)
 
 # ==========================================
-# PAGE 4: SMART AI DATA ANALYST
+# PAGE 4: SMART AI DATA ANALYST (FIXED VISUAL INSIGHTS)
 # ==========================================
 elif selected == "🤖 AI Analyst":
     st.title("🤖 Secure Enterprise AI Analyst")
@@ -309,22 +309,42 @@ elif selected == "🤖 AI Analyst":
         top_cat_sales = df.groupby("Category")["Sales"].sum().max() if not df.empty and 'Category' in df.columns else 0
         best_traffic_source = traffic_df.groupby("Source")["Conversions"].sum().idxmax() if not traffic_df.empty and 'Source' in traffic_df.columns else "N/A"
         
+        # ADDED: Groupby logic so the AI has actual breakdown data to visualize
+        category_breakdown = df.groupby('Category')['Sales'].sum().to_dict() if 'Category' in df.columns else "N/A"
+        
         if anonymize_data:
             data_context = f"""
-            You are a secure BI Analyst. Data context (ANONYMIZED):
+            You are a highly advanced E-Commerce Business Intelligence Analyst.
+            Data context (ANONYMIZED for Enterprise Security):
+            - Category Breakdown Proportions: {category_breakdown} (Speak in percentages/trends, do NOT reveal exact financial numbers)
             - Top Category: {top_category}
             - Profit Margin: {(df['Profit'].sum() / df['Sales'].sum()) * 100:.1f}% if df['Sales'].sum() > 0 else 'N/A'
             - Best Traffic Source: {best_traffic_source}
-            - Sales trends are positive, but do not state exact monetary figures.
+            
+            CRITICAL RULES FOR VISUAL INSIGHTS:
+            1. You MUST generate visual inline bar charts using Markdown symbols (e.g., █) to represent data proportions.
+               Example Format: Electronics | ██████████ 50%
+            2. ALWAYS use Markdown tables to organize data logically.
+            3. Use bold text to highlight KPIs and use relevant emojis (📈, 💰, ⚠️).
+            4. Keep insights sharp, prescriptive, and professional. Do not output massive walls of text.
             """
             display_sales = "[REDACTED]"
         else:
             data_context = f"""
-            You are a BI Analyst. Data context:
+            You are a highly advanced E-Commerce Business Intelligence Analyst.
+            Data context:
             - Total Sales: ${df['Sales'].sum():,.2f}
             - Total Profit: ${df['Profit'].sum():,.2f}
+            - Category Sales Breakdown: {category_breakdown}
             - Top Category: {top_category} (${top_cat_sales:,.2f})
             - Top Traffic Source: {best_traffic_source}
+            
+            CRITICAL RULES FOR VISUAL INSIGHTS:
+            1. You MUST generate visual inline bar charts using Markdown symbols (e.g., █) to represent data proportions.
+               Example Format: Electronics | ██████████ 50%
+            2. ALWAYS use Markdown tables to organize data logically.
+            3. Use bold text to highlight KPIs and use relevant emojis (📈, 💰, ⚠️).
+            4. Keep insights sharp, prescriptive, and professional. Do not output massive walls of text.
             """
             display_sales = f"${top_cat_sales:,.2f}"
             
@@ -356,11 +376,11 @@ elif selected == "🤖 AI Analyst":
             for msg in st.session_state.messages:
                 st.chat_message(msg["role"]).write(msg["content"])
 
-            if prompt := st.chat_input("Ask a question about the data..."):
+            if prompt := st.chat_input("E.g., 'Visualize my category sales breakdown.'"):
                 st.session_state.messages.append({"role": "user", "content": prompt})
                 st.chat_message("user").write(prompt)
                 
-                with st.spinner("Analyzing securely..."):
+                with st.spinner("Generating Visual Insights..."):
                     try:
                         response = model.generate_content(f"{data_context}\n\nUser: {prompt}")
                         msg = response.text
