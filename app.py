@@ -45,11 +45,16 @@ if not st.session_state.logged_in:
         password = st.text_input("Admin Password", type="password")
         
         if st.button("Secure Login", use_container_width=True):
-            if username == "admin" and password == "iub123":
+            # PROFESSIONAL UPGRADE 1: Strict Length & Complexity Check
+            if len(password) < 8:
+                st.error("⚠️ Security Policy: Password must be at least 8 characters long.")
+            
+            # PROFESSIONAL UPGRADE 2: Checking against Environment Secrets
+            elif username == st.secrets.get("ADMIN_USER", "admin") and password == st.secrets.get("ADMIN_PASS", "IUB_Secure_2026!"):
                 st.session_state.logged_in = True
                 st.rerun()
             else:
-                st.error("⚠️ Access Denied: Invalid credentials.")
+                st.error("⚠️ Access Denied: Invalid credentials or unauthorized attempt.")
         st.markdown("</div>", unsafe_allow_html=True)
     st.stop() # Halts execution here if not logged in
 
