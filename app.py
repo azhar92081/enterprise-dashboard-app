@@ -28,6 +28,32 @@ CUSTOM_COLORS = ["#00E5FF", "#FF3366", "#00FF66", "#FDB813", "#B366FF"]
 HOVER_STYLE = dict(bgcolor="#1e293b", font_size=14, font_color="#ffffff", bordercolor="#00E5FF")
 
 # ==========================================
+# 1.5 USER AUTHENTICATION & SECURITY
+# ==========================================
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+if not st.session_state.logged_in:
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown("<br><br><br>", unsafe_allow_html=True)
+        st.markdown("<div class='ai-box'>", unsafe_allow_html=True)
+        st.title("🔐 Enterprise System Login")
+        st.write("Please authenticate to access the E-Commerce BI Dashboard.")
+        
+        username = st.text_input("Admin Username")
+        password = st.text_input("Admin Password", type="password")
+        
+        if st.button("Secure Login", use_container_width=True):
+            if username == "admin" and password == "iub123":
+                st.session_state.logged_in = True
+                st.rerun()
+            else:
+                st.error("⚠️ Access Denied: Invalid credentials.")
+        st.markdown("</div>", unsafe_allow_html=True)
+    st.stop() # Halts execution here if not logged in
+
+# ==========================================
 # 2. CACHED DATA HANDLING & OPTIMIZATION
 # ==========================================
 @st.cache_data
@@ -68,7 +94,6 @@ def validate_sales_data(df):
 def convert_df_to_csv(df):
     return df.to_csv(index=False).encode('utf-8')
 
-# OPTIMIZATION: Cache the Silhouette Score Calculation to save memory
 @st.cache_data
 def calculate_optimal_k(scaled_data, max_k=5):
     best_k = 3
@@ -86,6 +111,12 @@ def calculate_optimal_k(scaled_data, max_k=5):
 # 3. SIDEBAR (Nav, Upload, Security & Filters)
 # ==========================================
 with st.sidebar:
+    st.success("✅ Logged in as: Admin")
+    if st.button("🚪 Secure Logout", use_container_width=True):
+        st.session_state.logged_in = False
+        st.rerun()
+        
+    st.divider()
     st.markdown("### 🛍️ E-Commerce BI")
     
     selected = option_menu(
@@ -152,11 +183,9 @@ with st.sidebar:
     # SMART HYBRID API KEY SYSTEM
     api_key = None
     try:
-        # 1. Try to automatically grab the key from the local vault first
         api_key = st.secrets["GEMINI_API_KEY"]
         st.success("🔑 Vault Key Active (Auto)")
     except Exception:
-        # 2. ONLY show the manual input box if the vault is completely missing
         st.warning("⚠️ Secret vault not found. Please enter your API key manually.")
         api_key = st.text_input("Enter Gemini API Key (Fallback):", type="password")
         if api_key:
@@ -253,19 +282,17 @@ elif selected == "Customer Intelligence":
         
         # Pre-process Data for ML
         rfm_data = df[['Recency', 'Frequency', 'Monetary']].dropna()
-        if len(rfm_data) > 2:
+        
+        # GUARDRAIL: Ensure enough data points exist to test up to 6 clusters mathematically
+        if len(rfm_data) >= 6:
             scaler = StandardScaler()
             scaled_rfm = scaler.fit_transform(rfm_data)
             
-            # OPTIMIZATION: Auto-calculate best cluster count mathematically
             optimal_k = calculate_optimal_k(scaled_rfm)
             
             with col1:
                 st.markdown("### Advanced ML Engine")
-                # Pre-fill slider with the AI's mathematically proven suggestion
                 clusters = st.slider("Select K-Means Clusters:", min_value=2, max_value=6, value=optimal_k)
-                
-                # Show the user why this is the best option
                 st.success(f"💡 **AI Suggestion:** Silhouette Score analysis indicates that **{optimal_k} clusters** is mathematically optimal for this dataset.")
                 st.info(f"**Data Science Note:** RFM variables normalized using `StandardScaler`. Processing {len(df['CustomerID'].unique())} unique customers.")
                     
@@ -278,24 +305,23 @@ elif selected == "Customer Intelligence":
                 fig3.update_layout(margin=dict(l=0, r=0, t=10, b=0), height=450, paper_bgcolor="rgba(0,0,0,0)", hoverlabel=HOVER_STYLE)
                 st.plotly_chart(fig3, use_container_width=True)
                 
-                # --- ACTIONABLE PROFILES & DOWNLOAD ---
                 col_title, col_dl = st.columns([3, 1])
                 with col_title:
                     st.markdown("### 📊 Actionable Segment Profiles")
                 
                 cluster_summary = df_clustered.groupby('Segment')[['Recency', 'Frequency', 'Monetary']].mean().reset_index()
                 
-                # OPTIMIZATION: Export Segments Button
                 with col_dl:
                     csv_segments = convert_df_to_csv(cluster_summary)
                     st.download_button(label="📥 Export Segments", data=csv_segments, file_name="customer_segments.csv", mime="text/csv")
 
-                # Format for display
                 display_summary = cluster_summary.copy()
                 display_summary['Recency'] = display_summary['Recency'].apply(lambda x: f"{x:.0f} days ago")
                 display_summary['Frequency'] = display_summary['Frequency'].apply(lambda x: f"{x:.1f} times")
                 display_summary['Monetary'] = display_summary['Monetary'].apply(lambda x: f"${x:,.2f}")
                 st.dataframe(display_summary, use_container_width=True, hide_index=True)
+        else:
+            st.warning("⚠️ Not enough data points to perform K-Means clustering. Please select more categories or widen the date range in the sidebar.")
 
 # ==========================================
 # PAGE 4: SMART AI DATA ANALYST
