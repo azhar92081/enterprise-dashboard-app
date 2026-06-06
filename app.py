@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import time
 from streamlit_option_menu import option_menu
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
@@ -45,16 +46,17 @@ if not st.session_state.logged_in:
         password = st.text_input("Admin Password", type="password")
         
         if st.button("Secure Login", use_container_width=True):
-            # PROFESSIONAL UPGRADE 1: Strict Length & Complexity Check
+            # STRICT EXAMINER TEST: Length & Credentials Check with Red/Green Signals
             if len(password) < 8:
-                st.error("⚠️ Security Policy: Password must be at least 8 characters long.")
+                st.error("False: Password must be at least 8 characters long.")
             
-            # PROFESSIONAL UPGRADE 2: Checking against Environment Secrets
             elif username == st.secrets.get("ADMIN_USER", "admin") and password == st.secrets.get("ADMIN_PASS", "IUB_Secure_2026!"):
+                st.success("True: Username verified successfully!")
+                time.sleep(1) # Pauses for 1 second so the green signal is visible before loading
                 st.session_state.logged_in = True
                 st.rerun()
             else:
-                st.error("⚠️ Access Denied: Invalid credentials or unauthorized attempt.")
+                st.error("False: Invalid username or password provided.")
         st.markdown("</div>", unsafe_allow_html=True)
     st.stop() # Halts execution here if not logged in
 
